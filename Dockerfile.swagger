@@ -1,0 +1,59 @@
+# Swagger-enabled Dockerfile for Azure DevOps Governance Factory
+FROM python:3.11-slim
+
+# Set working directory
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install additional development and documentation dependencies
+RUN pip install --no-cache-dir \
+    swagger-ui-bundle==0.0.9 \
+    redoc==1.0.1 \
+    mkdocs==1.5.3 \
+    mkdocs-material==9.4.6
+
+# Copy Azure DevOps wrapper
+COPY azure_devops_wrapper/ ./azure_devops_wrapper/
+
+# Copy application code
+COPY src/ ./src/
+COPY config/ ./config/
+
+# Copy documentation
+COPY docs/ ./docs/ 
+COPY README.md ./
+COPY azure_devops_wrapper/README.md ./azure_devops_wrapper/
+
+# Create swagger documentation directory
+RUN mkdir -p /app/docs/swagger
+
+# Create non-root user
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
+USER appuser
+
+# Expose port
+EXPOSE 8000
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Environment variables for enhanced documentation
+ENV SWAGGER_ENABLED=true
+ENV DOCS_ENABLED=true
+ENV API_TITLE="Azure DevOps Governance Factory API"
+ENV API_DESCRIPTION="Comprehensive Azure DevOps governance and automation platform"
+ENV API_VERSION="1.0.0"
+
+# Run the application with enhanced Swagger documentation
+CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

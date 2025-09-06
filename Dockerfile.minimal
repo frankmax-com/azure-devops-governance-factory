@@ -1,0 +1,28 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install Python dependencies
+COPY requirements.minimal.txt .
+RUN pip install --no-cache-dir -r requirements.minimal.txt
+
+# Copy application code
+COPY src/ ./src/
+COPY .env.example .env
+
+# Create health check endpoint script
+RUN echo '#!/bin/bash\ncurl -f http://localhost:8000/health || exit 1' > /healthcheck.sh && chmod +x /healthcheck.sh
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 CMD /healthcheck.sh
+
+EXPOSE 8000
+
+# Command to run the application
+CMD ["uvicorn", "src.main_minimal:app", "--host", "0.0.0.0", "--port", "8000"]

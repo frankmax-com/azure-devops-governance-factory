@@ -1,0 +1,100 @@
+version: '3.8'
+
+services:
+  azure-devops-governance-factory-swagger:
+    build: 
+      context: .
+      dockerfile: Dockerfile.swagger
+    container_name: azure-devops-swagger
+    ports:
+      - "8080:8000"
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/governance_db
+      - REDIS_URL=redis://redis:6379/0
+      - AZURE_CLIENT_ID=${AZURE_CLIENT_ID}
+      - AZURE_CLIENT_SECRET=${AZURE_CLIENT_SECRET}
+      - AZURE_TENANT_ID=${AZURE_TENANT_ID}
+      - AZURE_DEVOPS_ORGANIZATION=${AZURE_DEVOPS_ORGANIZATION}
+      - SECRET_KEY=${SECRET_KEY}
+      - SWAGGER_ENABLED=true
+      - API_TITLE="Azure DevOps Governance Factory API"
+      - API_DESCRIPTION="Comprehensive Azure DevOps governance and automation platform with ~2,125 API operations coverage"
+      - API_VERSION="1.0.0"
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./azure_devops_wrapper:/app/azure_devops_wrapper
+      - ./src:/app/src
+      - ./config:/app/config
+      - ./docs:/app/docs
+    networks:
+      - governance-network
+
+  postgres:
+    image: postgres:15
+    container_name: governance-postgres
+    environment:
+      - POSTGRES_DB=governance_db
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=password
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
+    networks:
+      - governance-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: governance-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - governance-network
+
+  swagger-ui:
+    image: swaggerapi/swagger-ui
+    container_name: azure-devops-swagger-ui
+    ports:
+      - "8081:8080"
+    environment:
+      - SWAGGER_JSON=/swagger/openapi.json
+      - API_URL=http://localhost:8080/api/v1/openapi.json
+      - DEEP_LINKING=true
+      - DISPLAY_OPERATION_ID=true
+      - DEFAULT_MODELS_EXPAND_DEPTH=1
+      - DEFAULT_MODEL_EXPAND_DEPTH=1
+      - DISPLAY_REQUEST_DURATION=true
+      - DOC_EXPANSION=none
+      - FILTER=true
+      - SHOW_EXTENSIONS=true
+      - SHOW_COMMON_EXTENSIONS=true
+    volumes:
+      - ./docs/swagger:/swagger
+    networks:
+      - governance-network
+
+  redoc:
+    image: redocly/redoc
+    container_name: azure-devops-redoc
+    ports:
+      - "8082:80"
+    environment:
+      - SPEC_URL=http://localhost:8080/api/v1/openapi.json
+      - PAGE_TITLE="Azure DevOps Governance Factory API Documentation"
+      - PAGE_FAVICON="https://avatars.githubusercontent.com/u/7658037?s=200&v=4"
+    networks:
+      - governance-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  governance-network:
+    driver: bridge
