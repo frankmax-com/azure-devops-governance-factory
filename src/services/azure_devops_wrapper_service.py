@@ -9,7 +9,7 @@ from typing import Dict, List, Any, Optional
 from fastapi import HTTPException
 import structlog
 
-from azure_devops_wrapper import AzureDevOpsClient, AuthConfig, RateLimitConfig
+from azure_devops_wrapper import AzureDevOpsClient, AuthConfig, AuthType, RateLimitConfig
 from src.core.config import get_settings
 
 settings = get_settings()
@@ -28,10 +28,11 @@ class AzureDevOpsWrapperService:
         try:
             # Configure authentication
             auth_config = AuthConfig(
-                auth_type="pat",  # or "service_principal" for production
-                personal_access_token=settings.AZURE_CLIENT_SECRET,
+                auth_type=AuthType.PAT,  # Use enum instead of string
+                organization="defaultorg",  # Will be overridden by organization_url
+                token=settings.AZURE_CLIENT_SECRET,
                 # For service principal auth:
-                # auth_type="service_principal",
+                # auth_type=AuthType.SERVICE_PRINCIPAL,
                 # client_id=settings.AZURE_CLIENT_ID,
                 # client_secret=settings.AZURE_CLIENT_SECRET,
                 # tenant_id=settings.AZURE_TENANT_ID
@@ -40,9 +41,9 @@ class AzureDevOpsWrapperService:
             # Configure rate limiting for production use
             rate_limit_config = RateLimitConfig(
                 requests_per_second=5.0,  # Conservative for Azure DevOps
-                burst_capacity=20,
-                max_retries=3,
-                backoff_factor=2.0
+                burst_size=20,
+                max_retry_attempts=3,
+                backoff_multiplier=2.0
             )
             
             # Initialize client
@@ -174,7 +175,7 @@ class AzureDevOpsWrapperService:
             raise HTTPException(status_code=500, detail="Azure DevOps client not initialized")
         
         try:
-            return await self.client.services.core.get_projects()
+            return await self.client.services.core.list_projects()
         except Exception as e:
             logger.error("Failed to get projects", error=str(e))
             raise HTTPException(status_code=500, detail=f"Failed to get projects: {str(e)}")
